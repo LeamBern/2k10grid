@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Gridshot FPS</title>
+
+<style>
+
+body{
+    margin:0;
+    overflow:hidden;
+    background:#000;
+}
+
+#crosshair{
+
+    position:fixed;
+
+    left:50%;
+    top:50%;
+
+    width:6px;
+    height:6px;
+
+    background:#00ffff;
+
+    border-radius:50%;
+
+    box-shadow:
+    0 0 6px #00ffff,
+    0 0 12px #00ffff;
+
+    transform:translate(-50%,-50%);
+
+    z-index:999;
+
+    pointer-events:none;
+}
+
+#score{
+
+    position:fixed;
+
+    top:20px;
+    left:20px;
+
+    color:white;
+
+    font-size:28px;
+
+    font-family:Arial;
+
+    z-index:999;
+}
+
+#menu{
+
+    position:fixed;
+
+    left:50%;
+    top:50%;
+
+    transform:translate(-50%,-50%);
+
+    background:#222;
+
+    padding:30px;
+
+    border-radius:15px;
+
+    text-align:center;
+
+    color:white;
+
+    font-family:Arial;
+
+    z-index:9999;
+}
+
+#menu button{
+
+    margin-top:20px;
+
+    padding:12px 30px;
+
+    font-size:22px;
+
+    cursor:pointer;
+}
+
+#menu input{
+
+    width:250px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="crosshair"></div>
+
+<div id="score">
+Score: 0
+</div>
+
+<div id="menu">
+
+    <h1>GRIDSHOT FPS</h1>
+
+    <p>Sensitivity</p>
+
+    <input
+    id="sensSlider"
+    type="range"
+    min="0.2"
+    max="5"
+    step="0.1"
+    value="1">
+
+    <br><br>
+
+    <span id="sensValue">
+        1.0
+    </span>
+
+    <br><br>
+
+    <button id="start">
+        PLAY
+    </button>
+
+</div>
+
+<script type="module">
+
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+let sensitivity = 1;
+
+const sensSlider =
+document.getElementById("sensSlider");
+
+const sensValue =
+document.getElementById("sensValue");
+
+sensSlider.addEventListener(
+"input",
+()=>{
+
+    sensitivity =
+    parseFloat(
+    sensSlider.value
+    );
+
+    sensValue.innerText =
+    sensitivity.toFixed(1);
+
+});
+
+const scene =
+new THREE.Scene();
+
+scene.background =
+new THREE.Color(0x000000);
+
+const camera =
+new THREE.PerspectiveCamera(
+75,
+window.innerWidth/window.innerHeight,
+0.1,
+1000
+);
+
+camera.position.z = 5;
+
+const renderer =
+new THREE.WebGLRenderer({
+antialias:true
+});
+
+renderer.setSize(
+window.innerWidth,
+window.innerHeight
+);
+
+document.body.appendChild(
+renderer.domElement
+);
+
+const light =
+new THREE.DirectionalLight(
+0xffffff,
+2
+);
+
+light.position.set(
+5,
+5,
+5
+);
+
+scene.add(light);
+
+const ambient =
+new THREE.AmbientLight(
+0xffffff,
+1
+);
+
+scene.add(ambient);
+
+const GRID = [
+
+[-4,  2,-9],
+[ 0,  2,-9],
+[ 4,  2,-9],
+
+[-4,  0,-9],
+[ 0,  0,-9],
+[ 4,  0,-9],
+
+[-4, -2,-9],
+[ 0, -2,-9],
+[ 4, -2,-9]
+
+];
+
+let score = 0;
+
+let targets = [];
+
+function createTarget(pos){
+
+    const sphere =
+    new THREE.Mesh(
+
+        new THREE.SphereGeometry(
+        0.9,
+        32,
+        32
+        ),
+
+        new THREE.MeshStandardMaterial({
+
+            color:0x00ffff,
+
+            emissive:0x005577,
+
+            emissiveIntensity:1.5
+
+        })
+
+    );
+
+    sphere.position.set(
+        pos[0],
+        pos[1],
+        pos[2]
+    );
+
+    scene.add(sphere);
+
+    targets.push(sphere);
+}
+
+function getFreePositions(){
+
+    const occupied = [];
+
+    targets.forEach(t=>{
+
+        occupied.push(
+        `${t.position.x}_${t.position.y}`
+        );
+
+    });
+
+    return GRID.filter(pos=>{
+
+        return !occupied.includes(
+        `${pos[0]}_${pos[1]}`
+        );
+
+    });
+
+}
+
+function spawnTarget(excludedX,excludedY){
+
+    let free =
+    getFreePositions();
+
+    free =
+    free.filter(pos=>{
+
+        return !(
+
+            pos[0] === excludedX &&
+            pos[1] === excludedY
+
+        );
+
+    });
+
+    if(free.length <= 0){
+        return;
+    }
+
+    const randomPos =
+    free[
+        Math.floor(
+        Math.random() *
+        free.length
+        )
+    ];
+
+    createTarget(randomPos);
+}
+
+for(let i=0;i<3;i++){
+
+    spawnTarget(
+    999,
+    999
+    );
+
+}
+
+document
+.getElementById("start")
+.onclick = ()=>{
+
+    document
+    .getElementById("menu")
+    .style.display =
+    "none";
+
+    document.body
+    .requestPointerLock();
+
+};
+
+let yaw = 0;
+
+let pitch = 0;
+
+document.addEventListener(
+"mousemove",
+(event)=>{
+
+if(
+document.pointerLockElement
+!== document.body
+) return;
+
+yaw -=
+event.movementX *
+0.002 *
+sensitivity;
+
+pitch -=
+event.movementY *
+0.002 *
+sensitivity;
+
+const limit =
+Math.PI / 2;
+
+yaw =
+Math.max(
+-limit,
+Math.min(
+limit,
+yaw
+)
+);
+
+pitch =
+Math.max(
+-0.6,
+Math.min(
+0.6,
+pitch
+)
+);
+
+camera.rotation.y =
+yaw;
+
+camera.rotation.x =
+pitch;
+
+});
+
+const raycaster =
+new THREE.Raycaster();
+
+document.addEventListener(
+"click",
+()=>{
+
+if(
+document.pointerLockElement
+!== document.body
+) return;
+
+raycaster.setFromCamera(
+new THREE.Vector2(0,0),
+camera
+);
+
+const hits =
+raycaster.intersectObjects(
+targets
+);
+
+if(hits.length){
+
+    const target =
+    hits[0].object;
+
+    const oldX =
+    target.position.x;
+
+    const oldY =
+    target.position.y;
+
+    scene.remove(
+    target
+    );
+
+    const index =
+    targets.indexOf(
+    target
+    );
+
+    if(index > -1){
+
+        targets.splice(
+        index,
+        1
+        );
+
+    }
+
+    score++;
+
+    document
+    .getElementById("score")
+    .innerText =
+    "Score: " + score;
+
+    spawnTarget(
+    oldX,
+    oldY
+    );
+
+}
+
+});
+
+function animate(){
+
+requestAnimationFrame(
+animate
+);
+
+renderer.render(
+scene,
+camera
+);
+
+}
+
+animate();
+
+window.addEventListener(
+"resize",
+()=>{
+
+camera.aspect =
+window.innerWidth /
+window.innerHeight;
+
+camera.updateProjectionMatrix();
+
+renderer.setSize(
+window.innerWidth,
+window.innerHeight
+);
+
+});
+
+</script>
+
+</body>
+</html>
