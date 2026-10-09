@@ -13,28 +13,64 @@ body{
 }
 
 #crosshair{
-
     position:fixed;
-
     left:50%;
     top:50%;
+    width:24px;
+    height:24px;
+    transform:translate(-50%,-50%);
+    z-index:999;
+    pointer-events:none;
+}
 
+/* Chấm tròn bình thường */
+#crosshair::before{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
     width:6px;
     height:6px;
-
     background:#00ffff;
-
     border-radius:50%;
-
     box-shadow:
     0 0 6px #00ffff,
     0 0 12px #00ffff;
-
     transform:translate(-50%,-50%);
+    transition:all 0.06s ease-out;
+}
 
-    z-index:999;
+/* Ẩn đi khi chưa hit */
+#crosshair::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:0;
+    height:0;
+    background:#ff2233;
+    box-shadow:
+    0 0 10px #ff2233,
+    0 0 20px #ff2233;
+    transform:translate(-50%,-50%) rotate(-45deg);
+    transition:all 0.06s ease-out;
+}
 
-    pointer-events:none;
+/* Khi bắn trúng — biến thành X đỏ */
+#crosshair.hit::before{
+    width:22px;
+    height:3px;
+    border-radius:0;
+    background:#ff2233;
+    box-shadow:
+    0 0 10px #ff2233,
+    0 0 20px #ff2233;
+    transform:translate(-50%,-50%) rotate(45deg);
+}
+
+#crosshair.hit::after{
+    width:22px;
+    height:3px;
 }
 
 #score{
@@ -155,6 +191,57 @@ Best: 0
         PLAY
     </button>
 
+</div>
+<div id="pauseMenu"
+style="
+display:none;
+position:fixed;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+background:#222;
+padding:30px;
+border-radius:15px;
+text-align:center;
+color:white;
+font-family:Arial;
+z-index:99999;
+">
+    <h1>PAUSED</h1>
+    <button id="resumeBtn"
+    style="
+    margin-top:20px;
+    padding:12px 30px;
+    font-size:22px;
+    cursor:pointer;
+    ">
+        RESUME
+    </button>
+    <br><br>
+    <button id="quitBtn"
+    style="
+    padding:12px 30px;
+    font-size:22px;
+    cursor:pointer;
+    ">
+        QUIT
+    </button>
+</div>
+<div id="resumeHint"
+style="
+display:none;
+position:fixed;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+color:white;
+font-size:26px;
+font-family:Arial;
+z-index:99998;
+text-shadow:0 0 15px #00ffff;
+pointer-events:none;
+">
+    Bấm chuột để tiếp tục
 </div>
 <div id="gameOver"
 style="
@@ -456,10 +543,12 @@ setInterval(()=>{
 
 },1000);
 
-    document
-    .getElementById("menu")
-    .style.display =
-    "none";
+document
+.getElementById("menu")
+.style.display =
+"none";
+
+pauseMenu.style.display = "none";
 
 renderer.domElement
 .requestPointerLock();
@@ -519,17 +608,41 @@ camera.rotation.x =
 pitch;
 
 });
+const crosshair = document.getElementById("crosshair");
+let hitmarkerTimer = null;
+
+function showHitmarker() {
+    crosshair.classList.add("hit");
+    clearTimeout(hitmarkerTimer);
+    hitmarkerTimer = setTimeout(() => {
+        crosshair.classList.remove("hit");
+    }, 120);
+}
 
 const raycaster =
 new THREE.Raycaster();
 
 document.addEventListener(
 "click",
-()=>{
+(e)=>{
+if (resumeHint.style.display === "block") {
+    resumeHint.style.display = "none";
+    renderer.domElement.requestPointerLock();
+    setTimeout(() => {
+        if (document.pointerLockElement === renderer.domElement) {
+            gameRunning = true;
+        } else {
+            resumeHint.style.display = "block";
+        }
+    }, 250);
+    return;
+}
 if(
 document.pointerLockElement
 !== renderer.domElement
 ) return;
+
+// ... phần bắn target bên dưới giữ nguyên
 
 raycaster.setFromCamera(
 new THREE.Vector2(0,0),
@@ -542,7 +655,7 @@ targets
 );
 
 if(hits.length){
-
+    showHitmarker();
     const target =
     hits[0].object;
 
@@ -600,6 +713,36 @@ camera
 }
 
 animate();
+const pauseMenu = document.getElementById("pauseMenu");
+
+document.addEventListener("pointerlockchange", () => {
+
+    // Nếu chuột vẫn đang bị "khóa" vào game → đang chơi bình thường
+    if (document.pointerLockElement === renderer.domElement) {
+        return;
+    }
+
+    // Nếu game đã kết thúc (hết giờ) → không pause
+    if (timeLeft <= 0) {
+        return;
+    }
+
+    // Nếu game đang chạy mà chuột bị "mở khóa" → PAUSE
+    if (gameRunning) {
+        gameRunning = false;
+        pauseMenu.style.display = "block";
+    }
+});
+
+document.getElementById("resumeBtn").onclick = (e) => {
+    e.stopPropagation();
+    pauseMenu.style.display = "none";
+    resumeHint.style.display = "block";
+};
+
+document.getElementById("quitBtn").onclick = () => {
+    location.reload();
+};
 
 window.addEventListener(
 "resize",
