@@ -74,7 +74,7 @@ body{
 
     font-family:Arial;
 
-    z-index:9999;
+    z-index:99999;
 }
 
 #menu button{
@@ -102,6 +102,31 @@ body{
 
 <div id="score">
 Score: 0
+</div>
+<div id="timer"
+style="
+position:fixed;
+top:60px;
+left:20px;
+color:white;
+font-size:28px;
+font-family:Arial;
+z-index:999;
+">
+Time: 60
+</div>
+
+<div id="best"
+style="
+position:fixed;
+top:100px;
+left:20px;
+color:white;
+font-size:28px;
+font-family:Arial;
+z-index:999;
+">
+Best: 0
 </div>
 
 <div id="menu">
@@ -131,9 +156,39 @@ Score: 0
     </button>
 
 </div>
+<div id="gameOver"
+style="
+display:none;
+position:fixed;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+background:#222;
+padding:30px;
+border-radius:15px;
+text-align:center;
+color:white;
+font-family:Arial;
+z-index:10000;
+">
+
+<h1>GAME OVER</h1>
+
+<h2 id="finalScore">
+Score: 0
+</h2>
+
+<h2 id="finalBest">
+Best: 0
+</h2>
+
+<button onclick="location.reload()">
+PLAY AGAIN
+</button>
+
+</div>
 
 <script type="module">
-
 import * as THREE from
 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
@@ -185,6 +240,8 @@ window.innerWidth,
 window.innerHeight
 );
 
+renderer.domElement.style.zIndex = "1";
+
 document.body.appendChild(
 renderer.domElement
 );
@@ -228,8 +285,22 @@ const GRID = [
 ];
 
 let score = 0;
+let timeLeft = 60;
+
+let gameRunning = false;
+let timerStarted = false;
+let bestScore =
+parseInt(
+localStorage.getItem(
+"bestScore"
+)
+) || 0;
 
 let targets = [];
+document
+.getElementById("best")
+.innerText =
+"Best: " + bestScore;
 
 function createTarget(pos){
 
@@ -332,14 +403,66 @@ document
 .getElementById("start")
 .onclick = ()=>{
 
+    gameRunning = true;
+if(timerStarted)
+return;
+
+timerStarted = true;
+setInterval(()=>{
+
+    if(!gameRunning)
+    return;
+
+    timeLeft--;
+
+    document
+    .getElementById("timer")
+    .innerText =
+    "Time: " + timeLeft;
+
+    if(timeLeft <= 0){
+
+        gameRunning = false;
+
+        document.exitPointerLock();
+
+        if(score > bestScore){
+
+            bestScore = score;
+
+            localStorage.setItem(
+            "bestScore",
+            score
+            );
+
+        }
+
+        document
+        .getElementById("finalScore")
+        .innerText =
+        "Score: " + score;
+
+        document
+        .getElementById("finalBest")
+        .innerText =
+        "Best: " + bestScore;
+
+        document
+        .getElementById("gameOver")
+        .style.display =
+        "block";
+
+    }
+
+},1000);
+
     document
     .getElementById("menu")
     .style.display =
     "none";
 
-    document.body
-    .requestPointerLock();
-
+renderer.domElement
+.requestPointerLock();
 };
 
 let yaw = 0;
@@ -350,9 +473,12 @@ document.addEventListener(
 "mousemove",
 (event)=>{
 
+if(!gameRunning)
+return;
+
 if(
 document.pointerLockElement
-!== document.body
+!== renderer.domElement
 ) return;
 
 yaw -=
@@ -400,10 +526,9 @@ new THREE.Raycaster();
 document.addEventListener(
 "click",
 ()=>{
-
 if(
 document.pointerLockElement
-!== document.body
+!== renderer.domElement
 ) return;
 
 raycaster.setFromCamera(
