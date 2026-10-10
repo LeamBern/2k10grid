@@ -278,7 +278,69 @@ PLAY AGAIN
 <script type="module">
 import * as THREE from
 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+// ===== BỘ ÂM THANH =====
+let audioCtx = null;
 
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playHitSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.type = "square";
+    osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1800, audioCtx.currentTime + 0.03);
+
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.08);
+}
+
+function playMissSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playTimeUpSound() {
+    if (!audioCtx) return;
+    [0, 0.2, 0.4].forEach((delay, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = "square";
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime + delay);
+
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.15);
+
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + 0.15);
+    });
+}
 let sensitivity = 1;
 
 const sensSlider =
@@ -372,6 +434,8 @@ const GRID = [
 ];
 
 let score = 0;
+let missCount = 0;
+const MISS_PER_PENALTY = 2;
 let timeLeft = 60;
 
 let gameRunning = false;
@@ -489,7 +553,7 @@ for(let i=0;i<3;i++){
 document
 .getElementById("start")
 .onclick = ()=>{
-
+    initAudio();
     gameRunning = true;
 if(timerStarted)
 return;
@@ -510,6 +574,8 @@ setInterval(()=>{
     if(timeLeft <= 0){
 
         gameRunning = false;
+        
+        playTimeUpSound();
 
         document.exitPointerLock();
 
@@ -618,7 +684,65 @@ function showHitmarker() {
         crosshair.classList.remove("hit");
     }, 120);
 }
+function spawnShatter(position) {
+    const FRAGMENT_COUNT = 12;
+    const DURATION = 400;
+    const fragments = [];
 
+    for (let i = 0; i < FRAGMENT_COUNT; i++) {
+        const size = 0.06 + Math.random() * 0.12;
+        const geo = new THREE.SphereGeometry(size, 8, 8);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 1
+        });
+        const frag = new THREE.Mesh(geo, mat);
+        frag.position.copy(position);
+
+        // Hướng bay ngẫu nhiên ra tứ phía
+        const dir = new THREE.Vector3(
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+            Math.random() - 0.5
+        ).normalize();
+
+        // Tốc độ bay ngẫu nhiên
+        const speed = 2 + Math.random() * 3;
+        frag.userData.velocity = dir.multiplyScalar(speed);
+
+        scene.add(frag);
+        fragments.push(frag);
+    }
+
+    const startTime = performance.now();
+
+    function animateShatter() {
+        const elapsed = performance.now() - startTime;
+        const t = elapsed / DURATION;
+
+        if (t >= 1) {
+            fragments.forEach(f => {
+                scene.remove(f);
+                f.geometry.dispose();
+                f.material.dispose();
+            });
+            return;
+        }
+
+        fragments.forEach(f => {
+            f.position.x += f.userData.velocity.x * 0.016;
+            f.position.y += f.userData.velocity.y * 0.016;
+            f.position.z += f.userData.velocity.z * 0.016;
+
+            f.scale.setScalar(1 - t);
+            f.material.opacity = 1 - t;
+        });
+
+        requestAnimationFrame(animateShatter);
+    }
+    animateShatter();
+}
 const raycaster =
 new THREE.Raycaster();
 
@@ -656,6 +780,7 @@ targets
 
 if(hits.length){
     showHitmarker();
+    playHitSound();
     const target =
     hits[0].object;
 
@@ -664,7 +789,7 @@ if(hits.length){
 
     const oldY =
     target.position.y;
-
+    spawnShatter(target.position);
     scene.remove(
     target
     );
@@ -697,6 +822,29 @@ if(hits.length){
 
 }
 
+else {
+
+    playMissSound();
+    missCount++;
+
+    if (missCount >= MISS_PER_PENALTY) {
+        missCount = 0;
+
+        if (score > 0) {
+            score--;
+            document
+            .getElementById("score")
+            .innerText =
+            "Score: " + score;
+        }
+
+        const ch = document.getElementById("crosshair");
+        ch.style.filter = "hue-rotate(-90deg) brightness(1.5)";
+        setTimeout(() => {
+            ch.style.filter = "";
+        }, 150);
+    }
+}
 });
 
 function animate(){
